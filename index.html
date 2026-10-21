@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABY Language Assistant</title>
+<style>
+:root{--bg:#f3f6fb;--card:#fff;--ink:#17212f;--mut:#667085;--pri:#0b6b5d;--wa:#1fa855;--line:#d9e0ea}
+@media(prefers-color-scheme:dark){:root{--bg:#10161f;--card:#1a2331;--ink:#eef2f7;--mut:#9aa6b8;--pri:#2bb39c;--line:#2c394d}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:4px 0 2px}
+.sub{color:var(--mut);font-size:.85rem;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{flex:1;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font-size:.85rem;cursor:pointer}
+.tab.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+label{display:block;font-size:.78rem;color:var(--mut);margin:8px 0 4px}
+select,input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem;font-family:inherit}
+textarea{min-height:110px;resize:vertical}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+button.b{padding:11px;border:0;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;color:#fff;background:var(--pri)}
+button.wa{background:var(--wa)}
+button.g{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5}
+.out{white-space:pre-wrap;min-height:60px;font-size:1.05rem;line-height:1.45}
+.st{font-size:.8rem;color:var(--mut);margin-top:6px;min-height:1em}
+.note{font-size:.75rem;color:var(--mut);text-align:center;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ABY Language Assistant</h1>
+  <div class="sub">Terjemahkan chat pelanggan, lalu kirim lewat WhatsApp.</div>
+
+  <div class="tabs">
+    <button class="tab on" id="t1">Saya → Pelanggan</button>
+    <button class="tab" id="t2">Pelanggan → Saya</button>
+  </div>
+
+  <div class="card">
+    <div id="langBox">
+      <label for="lang">Bahasa pelanggan</label>
+      <select id="lang"></select>
+    </div>
+    <label for="wa">No. WhatsApp pelanggan (opsional, awali kode negara)</label>
+    <input id="wa" type="tel" inputmode="tel" placeholder="6281234567890">
+    <label for="src" id="srcLabel">Tulis pesan (Indonesia)</label>
+    <textarea id="src" placeholder="Ketik atau tempel pesan di sini..."></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="b" id="go">Terjemahkan</button>
+      <button class="b g" id="paste">Tempel</button>
+      <button class="b g" id="clr">Hapus</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label id="outLabel">Hasil terjemahan</label>
+    <div class="out" id="out"></div>
+    <div class="st" id="st"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="b g" id="copy">Salin Hasil</button>
+      <button class="b wa" id="send">Buka WhatsApp</button>
+    </div>
+  </div>
+  <div class="note">Memakai layanan terjemahan gratis (MyMemory). Perlu internet; ada batas pemakaian harian dan hasil bisa kurang sempurna untuk kalimat panjang.</div>
+</div>
+
+<script>
+var LANGS=[["en","Inggris"],["zh-CN","Mandarin"],["es","Spanyol"],["fr","Prancis"],["ru","Rusia"],["ar","Arab"],["hi","India (Hindi)"],["ja","Jepang"],["ko","Korea"],["de","Jerman"],["nl","Belanda"],["ms","Melayu"]];
+var mode=1,$=function(i){return document.getElementById(i)};
+var sel=$("lang");
+LANGS.forEach(function(l){var o=document.createElement("option");o.value=l[0];o.textContent=l[1];sel.appendChild(o)});
+try{var s=localStorage.getItem("aby_lang");if(s)sel.value=s;var w=localStorage.getItem("aby_wa");if(w)$("wa").value=w}catch(e){}
+
+function setMode(m){
+  mode=m;
+  $("t1").className="tab"+(m==1?" on":"");
+  $("t2").className="tab"+(m==2?" on":"");
+  $("srcLabel").textContent=m==1?"Tulis pesan (Indonesia)":"Tempel pesan pelanggan (bahasa apa pun)";
+  $("outLabel").textContent=m==1?"Hasil terjemahan (untuk pelanggan)":"Terjemahan (Indonesia)";
+  $("langBox").style.display=m==1?"block":"none";
+  $("send").style.display=m==1?"block":"none";
+  $("out").textContent="";$("st").textContent="";
+}
+$("t1").onclick=function(){setMode(1)};
+$("t2").onclick=function(){setMode(2)};
+
+$("go").onclick=function(){
+  var q=$("src").value.trim();
+  if(!q){$("st").textContent="Tulis pesan dulu.";return}
+  try{localStorage.setItem("aby_lang",sel.value);localStorage.setItem("aby_wa",$("wa").value)}catch(e){}
+  var pair=mode==1?("id|"+sel.value):("Autodetect|id");
+  $("go").disabled=true;$("st").textContent="Menerjemahkan...";$("out").textContent="";
+  fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(q)+"&langpair="+encodeURIComponent(pair))
+  .then(function(r){return r.json()})
+  .then(function(d){
+    var t=d&&d.responseData&&d.responseData.translatedText;
+    if(!t||d.responseStatus&&d.responseStatus!=200){throw new Error((d&&d.responseDetails)||"gagal")}
+    $("out").textContent=t;$("st").textContent="Selesai.";
+  })
+  .catch(function(e){$("st").textContent="Gagal: "+e.message+". Coba lagi atau persingkat teks."})
+  .then(function(){$("go").disabled=false});
+};
+
+$("paste").onclick=function(){
+  if(navigator.clipboard&&navigator.clipboard.readText){
+    navigator.clipboard.readText().then(function(t){$("src").value=t;if(mode==2&&t.trim())$("go").click()}).catch(function(){$("st").textContent="Izin clipboard ditolak. Tempel manual."});
+  }else{$("st").textContent="Browser tidak mendukung. Tempel manual."}
+};
+$("clr").onclick=function(){$("src").value="";$("out").textContent="";$("st").textContent=""};
+
+$("copy").onclick=function(){
+  var t=$("out").textContent;if(!t)return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){$("st").textContent="Tersalin."}).catch(fb);
+  }else fb();
+  function fb(){var a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();try{document.execCommand("copy");$("st").textContent="Tersalin."}catch(e){$("st").textContent="Gagal menyalin."}document.body.removeChild(a)}
+};
+
+$("send").onclick=function(){
+  var t=$("out").textContent;if(!t){$("st").textContent="Terjemahkan dulu.";return}
+  var n=$("wa").value.replace(/\D/g,"");
+  if(n.indexOf("0")==0)n="62"+n.slice(1);
+  window.open("https://wa.me/"+n+"?text="+encodeURIComponent(t),"_blank");
+};
+setMode(1);
+</script>
+</body>
+</html>
