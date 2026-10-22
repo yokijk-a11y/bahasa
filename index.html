@@ -28,7 +28,10 @@ button:disabled{opacity:.5}
 .out{white-space:pre-wrap;min-height:60px;font-size:1.05rem;line-height:1.45}
 .st{font-size:.8rem;color:var(--mut);margin-top:6px;min-height:1em}
 .note{font-size:.75rem;color:var(--mut);text-align:center;margin-top:10px}
+.py{font-size:.95rem;color:var(--pri);margin-top:8px;line-height:1.5}
+.bk{font-size:.9rem;color:var(--mut);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.18.2/dist/index.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -59,17 +62,21 @@ button:disabled{opacity:.5}
   <div class="card">
     <label id="outLabel">Hasil terjemahan</label>
     <div class="out" id="out"></div>
+    <div class="py" id="py"></div>
+    <div class="bk" id="bk" style="display:none"></div>
     <div class="st" id="st"></div>
     <div class="row" style="margin-top:10px">
       <button class="b g" id="copy">Salin Hasil</button>
+      <button class="b g" id="back">Cek Balik</button>
       <button class="b wa" id="send">Buka WhatsApp</button>
     </div>
   </div>
-  <div class="note">Memakai layanan terjemahan gratis (MyMemory). Perlu internet; ada batas pemakaian harian dan hasil bisa kurang sempurna untuk kalimat panjang.</div>
+  <div class="note">Pinyin muncul otomatis untuk Mandarin. Tombol Cek Balik menerjemahkan hasil kembali ke Indonesia untuk memastikan maksudnya benar.<br>Memakai layanan terjemahan gratis (MyMemory). Perlu internet; ada batas pemakaian harian dan hasil bisa kurang sempurna untuk kalimat panjang.</div>
 </div>
 
 <script>
 var LANGS=[["en","Inggris"],["zh-CN","Mandarin"],["es","Spanyol"],["fr","Prancis"],["ru","Rusia"],["ar","Arab"],["hi","India (Hindi)"],["ja","Jepang"],["ko","Korea"],["de","Jerman"],["nl","Belanda"],["ms","Melayu"]];
+var EMAIL="yokijk@yahoo.com";
 var mode=1,$=function(i){return document.getElementById(i)};
 var sel=$("lang");
 LANGS.forEach(function(l){var o=document.createElement("option");o.value=l[0];o.textContent=l[1];sel.appendChild(o)});
@@ -83,6 +90,8 @@ function setMode(m){
   $("outLabel").textContent=m==1?"Hasil terjemahan (untuk pelanggan)":"Terjemahan (Indonesia)";
   $("langBox").style.display=m==1?"block":"none";
   $("send").style.display=m==1?"block":"none";
+  $("back").style.display=m==1?"block":"none";
+  $("py").textContent="";$("bk").style.display="none";$("bk").textContent="";
   $("out").textContent="";$("st").textContent="";
 }
 $("t1").onclick=function(){setMode(1)};
@@ -93,13 +102,15 @@ $("go").onclick=function(){
   if(!q){$("st").textContent="Tulis pesan dulu.";return}
   try{localStorage.setItem("aby_lang",sel.value);localStorage.setItem("aby_wa",$("wa").value)}catch(e){}
   var pair=mode==1?("id|"+sel.value):("Autodetect|id");
-  $("go").disabled=true;$("st").textContent="Menerjemahkan...";$("out").textContent="";
-  fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(q)+"&langpair="+encodeURIComponent(pair))
+  $("go").disabled=true;$("st").textContent="Menerjemahkan...";$("out").textContent="";$("py").textContent="";
+  fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(q)+"&langpair="+encodeURIComponent(pair)+"&de="+encodeURIComponent(EMAIL))
   .then(function(r){return r.json()})
   .then(function(d){
     var t=d&&d.responseData&&d.responseData.translatedText;
     if(!t||d.responseStatus&&d.responseStatus!=200){throw new Error((d&&d.responseDetails)||"gagal")}
     $("out").textContent=t;$("st").textContent="Selesai.";
+    $("bk").style.display="none";$("bk").textContent="";
+    if(mode==1&&sel.value=="zh-CN"&&window.pinyinPro){try{$("py").textContent="Pinyin: "+pinyinPro.pinyin(t,{toneType:"symbol"})}catch(e){}}
   })
   .catch(function(e){$("st").textContent="Gagal: "+e.message+". Coba lagi atau persingkat teks."})
   .then(function(){$("go").disabled=false});
@@ -125,6 +136,19 @@ $("send").onclick=function(){
   var n=$("wa").value.replace(/\D/g,"");
   if(n.indexOf("0")==0)n="62"+n.slice(1);
   window.open("https://wa.me/"+n+"?text="+encodeURIComponent(t),"_blank");
+};
+$("back").onclick=function(){
+  var t=$("out").textContent;if(!t){$("st").textContent="Terjemahkan dulu.";return}
+  $("back").disabled=true;$("st").textContent="Mengecek balik...";
+  fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(t)+"&langpair="+encodeURIComponent(sel.value+"|id")+"&de="+encodeURIComponent(EMAIL))
+  .then(function(r){return r.json()})
+  .then(function(d){
+    var b=d&&d.responseData&&d.responseData.translatedText;
+    if(!b||d.responseStatus&&d.responseStatus!=200){throw new Error((d&&d.responseDetails)||"gagal")}
+    $("bk").style.display="block";$("bk").textContent="Terjemah balik (cek): "+b;$("st").textContent="Selesai.";
+  })
+  .catch(function(e){$("st").textContent="Gagal: "+e.message})
+  .then(function(){$("back").disabled=false});
 };
 setMode(1);
 </script>
